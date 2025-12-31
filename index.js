@@ -3,6 +3,7 @@ import * as dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import cron from "node-cron";
 
 dotenv.config();
 
@@ -125,6 +126,55 @@ client.on("interactionCreate", async interaction => {
 
 client.once("ready", () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
+});
+
+client.login(process.env.DISCORD_TOKEN);
+
+// ---- 4. AUTOMATIC DAILY RESET (Auto Clock) ----
+client.once("ready", () => {
+    console.log(`✅ Logged in as ${client.user.tag}`);
+
+    // Schedule: Run every day at 00:00 (Midnight) Indian Standard Time
+    cron.schedule('0 0 * * *', () => {
+        console.log("🕛 Midnight hit! Resetting leaderboard...");
+
+        const DB_FILE = "database.json";
+        if (!fs.existsSync(DB_FILE)) return;
+
+        let db = JSON.parse(fs.readFileSync(DB_FILE));
+        let count = 0;
+
+        // Reset Logic
+        for (const userId in db) {
+            const user = db[userId];
+            
+            // 1. Save today's stats to yesterday
+            user.yesterday = {
+                cam_on: user.voice_cam_on_minutes || 0,
+                cam_off: user.voice_cam_off_minutes || 0
+            };
+
+            // 2. Reset today to 0
+            user.voice_cam_on_minutes = 0;
+            user.voice_cam_off_minutes = 0;
+            
+            count++;
+        }
+
+        fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+        console.log(`✅ Daily reset complete for ${count} users.`);
+
+        // OPTIONAL: Announce it in a Discord Channel
+        // Replace '123456789012345678' with your specific Channel ID
+        const channel = client.channels.cache.get('1428063184031453184'); 
+        if (channel) {
+            channel.send("🕛 **It's 12:00 AM!** Daily stats have been reset. Check `/mystatus-yesterday` to see how you did!");
+        }
+
+    }, {
+        scheduled: true,
+        timezone: "Asia/Kolkata" // 🇮🇳 Forces Indian Time (IST)
+    });
 });
 
 client.login(process.env.DISCORD_TOKEN);
