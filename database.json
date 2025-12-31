@@ -1,0 +1,30 @@
+{
+  "1409403815572017232": {
+    "voice_minutes": 12,
+    "messages": 0,
+    "last_join": null,
+    "last_video": false
+  },
+  "1406313503278764174": {
+    "voice_minutes": 13,
+    "messages": 0,
+    "last_join": 1767149107471,
+    "last_video": true,
+    "voice_cam_off_minutes": 0,
+    "voice_cam_on_minutes": null
+  },
+  "1432675092227428375": {
+    "voice_cam_on_minutes": 4,
+    "voice_cam_off_minutes": 0,
+    "messages": 0,
+    "last_join": 1767149192236,
+    "last_video": true
+  },
+  "1449952640455934022": {
+    "voice_cam_on_minutes": 0,
+    "voice_cam_off_minutes": 0,
+    "messages": 0,
+    "last_join": 1767149201637,
+    "last_video": false
+  }
+}
