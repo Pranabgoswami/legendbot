@@ -16,11 +16,10 @@ const client = new Client({
 
 client.commands = new Collection();
 
-// ---- 1. DYNAMIC COMMAND LOADER (The Fix) ----
+// ---- 1. DYNAMIC COMMAND LOADER ----
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Find all files that end with .js (skipping index.js and database.json)
 const commandFiles = fs.readdirSync(__dirname).filter(file => 
     file.endsWith('.js') && file !== 'index.js' && file !== 'deploy-commands.js'
 );
@@ -28,14 +27,10 @@ const commandFiles = fs.readdirSync(__dirname).filter(file =>
 console.log("--------------------------------");
 console.log("Loading commands...");
 
-// We use an async function to load files
 const loadCommands = async () => {
     for (const file of commandFiles) {
         try {
-            // Import the file dynamically
             const command = await import(`./${file}`);
-            
-            // Check if it has 'data' and 'execute' (standard discord.js structure)
             if (command.default && command.default.data && command.default.execute) {
                 client.commands.set(command.default.data.name, command.default);
                 console.log(`✅ Loaded: /${command.default.data.name}`);
@@ -49,13 +44,11 @@ const loadCommands = async () => {
     console.log("--------------------------------");
 };
 
-// Call the loader
 await loadCommands();
 
 
-// ---- 2. VOICE TRACKING (Keep your existing logic) ----
+// ---- 2. VOICE TRACKING LOGIC ----
 const DB_FILE = "database.json";
-// Ensure DB exists
 if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, JSON.stringify({}, null, 2));
 
 client.on("voiceStateUpdate", (oldState, newState) => {
@@ -103,19 +96,13 @@ client.on("voiceStateUpdate", (oldState, newState) => {
 // ---- 3. SLASH COMMAND HANDLER ----
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
-  
   const cmd = client.commands.get(interaction.commandName);
-  
-  if (!cmd) {
-      console.error(`No command matching ${interaction.commandName} was found.`);
-      return;
-  }
+  if (!cmd) return;
 
   try {
     await cmd.execute(interaction);
   } catch (e) {
     console.error(e);
-    // Avoid crashing if already replied
     if (interaction.replied || interaction.deferred) {
         await interaction.followUp({ content: '❌ Error executing command!', ephemeral: true });
     } else {
@@ -124,17 +111,12 @@ client.on("interactionCreate", async interaction => {
   }
 });
 
-client.once("ready", () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-});
 
-client.login(process.env.DISCORD_TOKEN);
-
-// ---- 4. AUTOMATIC DAILY RESET (Auto Clock) ----
+// ---- 4. READY EVENT & AUTO CLOCK (Merged) ----
 client.once("ready", () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
 
-    // Schedule: Run every day at 00:00 (Midnight) Indian Standard Time
+    // Schedule: Run every day at 12:00 AM (Midnight) IST
     cron.schedule('0 0 * * *', () => {
         console.log("🕛 Midnight hit! Resetting leaderboard...");
 
@@ -144,7 +126,6 @@ client.once("ready", () => {
         let db = JSON.parse(fs.readFileSync(DB_FILE));
         let count = 0;
 
-        // Reset Logic
         for (const userId in db) {
             const user = db[userId];
             
@@ -154,7 +135,7 @@ client.once("ready", () => {
                 cam_off: user.voice_cam_off_minutes || 0
             };
 
-            // 2. Reset today to 0
+            // 2. Reset today's stats to 0
             user.voice_cam_on_minutes = 0;
             user.voice_cam_off_minutes = 0;
             
@@ -164,8 +145,7 @@ client.once("ready", () => {
         fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
         console.log(`✅ Daily reset complete for ${count} users.`);
 
-        // OPTIONAL: Announce it in a Discord Channel
-        // Replace '123456789012345678' with your specific Channel ID
+        // Announce in your channel
         const channel = client.channels.cache.get('1428063184031453184'); 
         if (channel) {
             channel.send("🕛 **It's 12:00 AM!** Daily stats have been reset. Check `/mystatus-yesterday` to see how you did!");
@@ -173,8 +153,9 @@ client.once("ready", () => {
 
     }, {
         scheduled: true,
-        timezone: "Asia/Kolkata" // 🇮🇳 Forces Indian Time (IST)
+        timezone: "Asia/Kolkata"
     });
 });
 
+// ---- LOGIN (Only Once!) ----
 client.login(process.env.DISCORD_TOKEN);
