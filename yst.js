@@ -3,7 +3,7 @@ import fs from "fs";
 
 export default {
     data: new SlashCommandBuilder()
-        .setName("mystatus-yesterday")
+        .setName("yst") // <--- This is the new short command name!
         .setDescription("Show my study stats from yesterday"),
 
     async execute(interaction) {
