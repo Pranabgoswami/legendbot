@@ -3,25 +3,24 @@ import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
 export default {
     data: new SlashCommandBuilder()
         .setName("ask")
-        .setDescription("Ask AI a study doubt (Biology/Physics/Chemistry)")
+        .setDescription("Ask AI a study doubt (Debug Version)")
         .addStringOption(option => 
             option.setName("question")
                 .setDescription("What is your doubt?")
                 .setRequired(true)),
 
     async execute(interaction) {
-        // 1. Defer Reply (AI takes a few seconds to think)
         await interaction.deferReply();
 
         const question = interaction.options.getString("question");
         const apiKey = process.env.AI_API_KEY;
 
+        // CHECK 1: Is the key loaded?
         if (!apiKey) {
-            return interaction.editReply("❌ AI API Key is missing from dashboard variables!");
+            return interaction.editReply("❌ **Error:** The `AI_API_KEY` variable is missing. Did you redeploy?");
         }
 
         try {
-            // 2. Prepare the request for Gemini API
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
             
             const response = await fetch(url, {
@@ -30,11 +29,7 @@ export default {
                 body: JSON.stringify({
                     contents: [{
                         parts: [{
-                            text: `You are a helpful NEET exam tutor for Indian students. 
-                            Answer this question clearly and concisely in simple English (mixed with Hinglish if helpful). 
-                            Keep it short (under 200 words) and focus on NCERT concepts.
-                            
-                            Question: ${question}`
+                            text: `Answer this NEET question in simple English: ${question}`
                         }]
                     }]
                 })
@@ -42,24 +37,31 @@ export default {
 
             const data = await response.json();
 
-            // 3. Extract the answer
-            let answer = "Could not generate an answer.";
-            if (data.candidates && data.candidates[0].content) {
-                answer = data.candidates[0].content.parts[0].text;
+            // CHECK 2: Did Google send an error?
+            if (data.error) {
+                console.log("Google API Error:", data.error);
+                return interaction.editReply(`❌ **Google API Error:**\n${data.error.message}`);
             }
 
-            // 4. Send the result
+            // CHECK 3: valid answer?
+            let answer = "No answer found.";
+            if (data.candidates && data.candidates[0].content) {
+                answer = data.candidates[0].content.parts[0].text;
+            } else {
+                return interaction.editReply("❌ **Error:** AI connected but returned no content. (Likely safety filter blocked it)");
+            }
+
             const embed = new EmbedBuilder()
-                .setColor(0x00BFFF) // Deep Sky Blue
+                .setColor(0x00BFFF)
                 .setTitle(`🤖 AI Doubt Solution`)
                 .setDescription(`**Q:** ${question}\n\n**A:** ${answer}`)
-                .setFooter({ text: "Powered by Gemini AI • Verify with NCERT" });
+                .setFooter({ text: "Powered by Gemini AI" });
 
             await interaction.editReply({ embeds: [embed] });
 
         } catch (error) {
             console.error(error);
-            await interaction.editReply("❌ Failed to contact AI. Try again later.");
+            await interaction.editReply(`❌ **Network Error:** ${error.message}`);
         }
     }
 };
