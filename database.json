@@ -1,30 +1,44 @@
 {
-  "1409403815572017232": {
-    "voice_minutes": 12,
-    "messages": 0,
-    "last_join": null,
-    "last_video": false
-  },
   "1406313503278764174": {
-    "voice_minutes": 13,
-    "messages": 0,
-    "last_join": 1767149107471,
-    "last_video": true,
-    "voice_cam_off_minutes": 0,
-    "voice_cam_on_minutes": null
+    "voice_cam_on_minutes": 360,
+    "voice_cam_off_minutes": 60,
+    "last_video": false,
+    "yesterday": { "cam_on": 0, "cam_off": 0 }
   },
-  "1432675092227428375": {
-    "voice_cam_on_minutes": 4,
-    "voice_cam_off_minutes": 0,
-    "messages": 0,
-    "last_join": 1767149192236,
-    "last_video": true
+  "1317768159494799360": {
+    "voice_cam_on_minutes": 300,
+    "voice_cam_off_minutes": 5,
+    "last_video": false,
+    "yesterday": { "cam_on": 0, "cam_off": 0 }
   },
-  "1449952640455934022": {
+  "1429338722029142072": {
+    "voice_cam_on_minutes": 120,
+    "voice_cam_off_minutes": 3,
+    "last_video": false,
+    "yesterday": { "cam_on": 0, "cam_off": 0 }
+  },
+  "1339804971423760501": {
     "voice_cam_on_minutes": 0,
     "voice_cam_off_minutes": 0,
-    "messages": 0,
-    "last_join": 1767149201637,
-    "last_video": false
+    "last_video": false,
+    "yesterday": { "cam_on": 0, "cam_off": 0 }
+  },
+  "1421902162216091811": {
+    "voice_cam_on_minutes": 120,
+    "voice_cam_off_minutes": 1,
+    "last_video": false,
+    "yesterday": { "cam_on": 0, "cam_off": 0 }
+  },
+  "1399267781723291659": {
+    "voice_cam_on_minutes": 120,
+    "voice_cam_off_minutes": 0,
+    "last_video": false,
+    "yesterday": { "cam_on": 0, "cam_off": 0 }
+  },
+  "1308131238380441602": {
+    "voice_cam_on_minutes": 0,
+    "voice_cam_off_minutes": 0,
+    "last_video": false,
+    "yesterday": { "cam_on": 0, "cam_off": 0 }
   }
 }
