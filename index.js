@@ -8,8 +8,8 @@ import cron from "node-cron";
 
 dotenv.config();
 
-// 🌍 1. KEEP-ALIVE SERVER (CRITICAL FIX FOR CRASHES)
-// We force it to listen on '0.0.0.0' so the hosting platform can see it.
+// 🌍 1. KEEP-ALIVE SERVER (CRITICAL FIX)
+// Forces the bot to listen on '0.0.0.0' so the server sees it as "Healthy".
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -18,12 +18,13 @@ http.createServer((req, res) => {
     console.log(`🌍 Keep-Alive Server running on port ${PORT}`);
 });
 
-// 🚨 2. CONFIGURATION: Your Strict Channel IDs
-// These are the IDs you gave me.
+// 🚨 2. CONFIGURATION: Strict Channel IDs
+// Added your 5 specific IDs below.
 const STRICT_CHANNEL_IDS = [
-    "1428762702414872636",
-    "1455906399262605457",
     "1455582132218106151",
+    "1427325474551500851",
+    "1455906399262605457",
+    "1428762702414872636",
     "1428762820585062522"
 ]; 
 const WARNING_TIME = 3 * 60 * 1000; // 3 Minutes
@@ -39,7 +40,7 @@ const client = new Client({
 client.commands = new Collection();
 const commandsArray = [];
 const DB_FILE = "database.json";
-const kickTimers = new Map(); // Stores kick timers
+const kickTimers = new Map(); 
 
 // Ensure Database Exists
 if (!fs.existsSync(DB_FILE)) {
@@ -77,8 +78,6 @@ const loadAndRegister = async () => {
 await loadAndRegister();
 
 // ---- 5. VOICE TRACKING & KICK LOGIC ----
-
-// Helper: Cam is ON if Video OR Screen Share is active
 const isCamOn = (state) => state.selfVideo || state.streaming;
 
 const getDb = () => {
@@ -89,7 +88,6 @@ const saveSession = (userId, durationMinutes, wasCamOn) => {
     if (durationMinutes <= 0) return;
     let db = getDb();
     
-    // Create user if missing
     if (!db[userId]) db[userId] = { 
         voice_cam_on_minutes: 0, 
         voice_cam_off_minutes: 0, 
@@ -97,7 +95,7 @@ const saveSession = (userId, durationMinutes, wasCamOn) => {
         yesterday: { cam_on: 0, cam_off: 0 } 
     };
     
-    // Safety check for nulls
+    // Safety check for corrupt data
     if (typeof db[userId].voice_cam_on_minutes !== 'number') db[userId].voice_cam_on_minutes = 0;
     if (typeof db[userId].voice_cam_off_minutes !== 'number') db[userId].voice_cam_off_minutes = 0;
 
