@@ -1,3 +1,4 @@
+import http from "http";
 import { Client, GatewayIntentBits, Collection, REST, Routes } from "discord.js";
 import * as dotenv from "dotenv";
 import fs from "fs";
@@ -7,8 +8,17 @@ import cron from "node-cron";
 
 dotenv.config();
 
-// 🚨 CONFIGURATION: List all your Strict Channel IDs here inside ["..."]
-// You can add as many as you want, separated by commas.
+// 🌍 1. KEEP-ALIVE SERVER (Fixes the "Stopping Container" Crash)
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end("LegendBot is Online! 🦚");
+}).listen(PORT, () => {
+    console.log(`🌍 Keep-Alive Server running on port ${PORT}`);
+});
+
+// 🚨 2. CONFIGURATION: Strict Channel IDs
+// Paste the IDs of the channels where you want to ENFORCE cameras.
 const STRICT_CHANNEL_IDS = [
     "1428762702414872636", 
     "1455906399262605457",
@@ -17,6 +27,7 @@ const STRICT_CHANNEL_IDS = [
 ]; 
 const WARNING_TIME = 3 * 60 * 1000; // 3 Minutes
 
+// ---- 3. CLIENT SETUP ----
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -27,14 +38,14 @@ const client = new Client({
 client.commands = new Collection();
 const commandsArray = [];
 const DB_FILE = "database.json";
-const kickTimers = new Map();
+const kickTimers = new Map(); // Stores kick timers
 
 // Ensure Database Exists
 if (!fs.existsSync(DB_FILE)) {
     fs.writeFileSync(DB_FILE, JSON.stringify({}, null, 2));
 }
 
-// ---- 1. DYNAMIC COMMAND LOADER ----
+// ---- 4. DYNAMIC COMMAND LOADER ----
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const commandFiles = fs.readdirSync(__dirname).filter(file => 
@@ -64,8 +75,9 @@ const loadAndRegister = async () => {
 };
 await loadAndRegister();
 
-// ---- 2. VOICE TRACKING & KICK LOGIC ----
+// ---- 5. VOICE TRACKING & KICK LOGIC ----
 
+// Helper: Cam is ON if Video OR Screen Share is active
 const isCamOn = (state) => state.selfVideo || state.streaming;
 
 const getDb = () => {
@@ -75,9 +87,16 @@ const getDb = () => {
 const saveSession = (userId, durationMinutes, wasCamOn) => {
     if (durationMinutes <= 0) return;
     let db = getDb();
-    if (!db[userId]) db[userId] = { voice_cam_on_minutes: 0, voice_cam_off_minutes: 0, last_video: false, yesterday: { cam_on: 0, cam_off: 0 } };
     
-    // Safety
+    // Create user if missing
+    if (!db[userId]) db[userId] = { 
+        voice_cam_on_minutes: 0, 
+        voice_cam_off_minutes: 0, 
+        last_video: false, 
+        yesterday: { cam_on: 0, cam_off: 0 } 
+    };
+    
+    // Safety check for nulls
     if (!db[userId].voice_cam_on_minutes) db[userId].voice_cam_on_minutes = 0;
     if (!db[userId].voice_cam_off_minutes) db[userId].voice_cam_off_minutes = 0;
 
@@ -89,15 +108,14 @@ const saveSession = (userId, durationMinutes, wasCamOn) => {
         db[userId].last_video = false;
     }
     fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
-    console.log(`💾 Saved ${durationMinutes}m for ${userId}`);
+    console.log(`💾 Saved ${durationMinutes}m for ${userId} (Cam: ${wasCamOn})`);
 };
 
-// 🛑 KICK FUNCTION (Supports Multiple Channels)
+// 🛑 KICK LOGIC
 const handleKickLogic = (member, state) => {
-    // 1. Check if the user is in ANY of the strict channels
     const isStrictChannel = STRICT_CHANNEL_IDS.includes(state.channelId);
 
-    // If NOT in a strict channel, cancel any existing timer
+    // If NOT in strict channel, clear timer and exit
     if (!isStrictChannel) {
         if (kickTimers.has(member.id)) {
             clearTimeout(kickTimers.get(member.id));
@@ -106,7 +124,7 @@ const handleKickLogic = (member, state) => {
         return;
     }
 
-    // If Cam is ON: Safe! Clear timer.
+    // If Cam is ON: Safe!
     if (isCamOn(state)) {
         if (kickTimers.has(member.id)) {
             console.log(`🛡️ ${member.user.tag} turned cam ON. Kick cancelled.`);
@@ -114,19 +132,16 @@ const handleKickLogic = (member, state) => {
             kickTimers.delete(member.id);
         }
     } 
-    // If Cam is OFF: Start the countdown!
+    // If Cam is OFF: Start Timer
     else {
         if (!kickTimers.has(member.id)) {
             console.log(`⏳ ${member.user.tag} has 3 mins to turn cam on...`);
-            
             const timer = setTimeout(async () => {
-                // Double check they are still in a strict channel and cam is still off
                 const currentMember = await member.guild.members.fetch(member.id).catch(() => null);
-                
+                // Double check status before kicking
                 if (currentMember && 
                     STRICT_CHANNEL_IDS.includes(currentMember.voice.channelId) && 
                     !isCamOn(currentMember.voice)) {
-                    
                     try {
                         await currentMember.voice.disconnect("Camera Enforcement");
                         console.log(`🥾 Kicked ${member.user.tag} for no camera.`);
@@ -136,7 +151,6 @@ const handleKickLogic = (member, state) => {
                 }
                 kickTimers.delete(member.id);
             }, WARNING_TIME);
-            
             kickTimers.set(member.id, timer);
         }
     }
@@ -151,15 +165,14 @@ client.on("voiceStateUpdate", (oldState, newState) => {
     const wasIn = !!oldState.channelId;
     const isIn = !!newState.channelId;
 
-    // Run Kick Logic Check
+    // Check Kick Logic
     if (isIn) handleKickLogic(member, newState);
     else if (!isIn && kickTimers.has(member.id)) {
-        // If they disconnected completely, clear timer
         clearTimeout(kickTimers.get(member.id));
         kickTimers.delete(member.id);
     }
 
-    // --- STANDARD TRACKING LOGIC ---
+    // Standard Tracking Logic
     if (wasIn && !isIn) { // Left
         if (member.joinTime) {
             saveSession(member.id, Math.floor((Date.now() - member.joinTime) / 60000), oldCam);
@@ -175,7 +188,7 @@ client.on("voiceStateUpdate", (oldState, newState) => {
     }
 });
 
-// ---- 3. AUTO-SAVER ----
+// ---- 6. AUTO-SAVER (Runs every 2 minutes) ----
 setInterval(() => {
     const voiceChannels = client.channels.cache.filter(c => c.type === 2);
     voiceChannels.forEach(channel => {
@@ -191,17 +204,18 @@ setInterval(() => {
     });
 }, 2 * 60 * 1000);
 
-// ---- 4. COMMAND HANDLER ----
+// ---- 7. INTERACTION HANDLER ----
 client.on("interactionCreate", async interaction => {
     if (!interaction.isChatInputCommand()) return;
     const cmd = client.commands.get(interaction.commandName);
     if (cmd) try { await cmd.execute(interaction); } catch (e) { console.error(e); }
 });
 
-// ---- 5. MIDNIGHT RESET ----
+// ---- 8. MIDNIGHT RESET ----
 client.once("ready", () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
     cron.schedule('0 0 * * *', () => {
+        console.log("🕛 Midnight Reset!");
         let db = getDb();
         for (const id in db) {
             db[id].yesterday = { cam_on: db[id].voice_cam_on_minutes || 0, cam_off: db[id].voice_cam_off_minutes || 0 };
