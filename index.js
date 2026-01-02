@@ -8,18 +8,18 @@ import cron from "node-cron";
 
 dotenv.config();
 
-// 🌍 1. KEEP-ALIVE SERVER (CRITICAL FIX)
-// This fake website tells the server "I am alive" so it stops killing the bot.
+// 🌍 1. KEEP-ALIVE SERVER (CRITICAL FIX FOR CRASHES)
+// We force it to listen on '0.0.0.0' so the hosting platform can see it.
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end("LegendBot is Online! 🦚");
-}).listen(PORT, () => {
+}).listen(PORT, '0.0.0.0', () => {  
     console.log(`🌍 Keep-Alive Server running on port ${PORT}`);
 });
 
 // 🚨 2. CONFIGURATION: Your Strict Channel IDs
-// I have added the IDs you gave me below.
+// These are the IDs you gave me.
 const STRICT_CHANNEL_IDS = [
     "1428762702414872636",
     "1455906399262605457",
