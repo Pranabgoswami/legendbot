@@ -8,7 +8,8 @@ import cron from "node-cron";
 
 dotenv.config();
 
-// 🌍 1. KEEP-ALIVE SERVER (Fixes the "Stopping Container" Crash)
+// 🌍 1. KEEP-ALIVE SERVER (CRITICAL FIX)
+// This fake website tells the server "I am alive" so it stops killing the bot.
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
@@ -17,10 +18,10 @@ http.createServer((req, res) => {
     console.log(`🌍 Keep-Alive Server running on port ${PORT}`);
 });
 
-// 🚨 2. CONFIGURATION: Strict Channel IDs
-// Paste the IDs of the channels where you want to ENFORCE cameras.
+// 🚨 2. CONFIGURATION: Your Strict Channel IDs
+// I have added the IDs you gave me below.
 const STRICT_CHANNEL_IDS = [
-    "1428762702414872636", 
+    "1428762702414872636",
     "1455906399262605457",
     "1455582132218106151",
     "1428762820585062522"
@@ -97,8 +98,8 @@ const saveSession = (userId, durationMinutes, wasCamOn) => {
     };
     
     // Safety check for nulls
-    if (!db[userId].voice_cam_on_minutes) db[userId].voice_cam_on_minutes = 0;
-    if (!db[userId].voice_cam_off_minutes) db[userId].voice_cam_off_minutes = 0;
+    if (typeof db[userId].voice_cam_on_minutes !== 'number') db[userId].voice_cam_on_minutes = 0;
+    if (typeof db[userId].voice_cam_off_minutes !== 'number') db[userId].voice_cam_off_minutes = 0;
 
     if (wasCamOn) {
         db[userId].voice_cam_on_minutes += durationMinutes;
