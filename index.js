@@ -1,5 +1,5 @@
 import http from "http";
-import { Client, GatewayIntentBits, Collection, REST, Routes, Events } from "discord.js";
+import { Client, GatewayIntentBits, Collection, REST, Routes, Events, EmbedBuilder } from "discord.js";
 import * as dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
@@ -8,42 +8,33 @@ import cron from "node-cron";
 
 dotenv.config();
 
-// 🌍 1. KEEP-ALIVE SERVER (CRITICAL FIX)
-// We bind to '0.0.0.0' to ensure the hosting provider can see the bot is alive.
+// 🌍 1. KEEP-ALIVE SERVER
 const PORT = process.env.PORT || 3000;
 const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end("LegendBot is Online! 🦚");
 });
-
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🌍 Keep-Alive Server running on port ${PORT}`);
 });
 
-// 🚨 2. CONFIGURATION: Strict Channel IDs
-const STRICT_CHANNEL_IDS = [
-    "1455582132218106151",
-    "1427325474551500851",
-    "1455906399262605457",
-    "1428762702414872636",
-    "1428762820585062522"
-]; 
-const WARNING_TIME = 3 * 60 * 1000; // 3 Minutes
+// 🚨 2. CONFIGURATION (Strict Mode Removed)
+const AUTO_LB_CHANNEL_ID = "1455385042044846242"; 
 
 // ---- 3. CLIENT SETUP ----
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildVoiceStates
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildMembers
     ]
 });
 
 client.commands = new Collection();
 const commandsArray = [];
 const DB_FILE = "database.json";
-const kickTimers = new Map(); 
+// Removed kickTimers map
 
-// Ensure Database Exists
 if (!fs.existsSync(DB_FILE)) {
     fs.writeFileSync(DB_FILE, JSON.stringify({}, null, 2));
 }
@@ -78,16 +69,16 @@ const loadAndRegister = async () => {
 };
 await loadAndRegister();
 
-// ---- 5. VOICE TRACKING & KICK LOGIC ----
+// ---- 5. HELPERS ----
 const isCamOn = (state) => state.selfVideo || state.streaming;
 
 const getDb = () => {
     try { return JSON.parse(fs.readFileSync(DB_FILE)); } catch { return {}; }
 };
 
-const saveSession = (userId, durationMinutes, wasCamOn) => {
+// ⚡ OPTIMIZED SAVE
+const updateDbInMemory = (db, userId, durationMinutes, wasCamOn) => {
     if (durationMinutes <= 0) return;
-    let db = getDb();
     
     if (!db[userId]) db[userId] = { 
         voice_cam_on_minutes: 0, 
@@ -95,8 +86,6 @@ const saveSession = (userId, durationMinutes, wasCamOn) => {
         last_video: false, 
         yesterday: { cam_on: 0, cam_off: 0 } 
     };
-    
-    // Safety Checks
     if (typeof db[userId].voice_cam_on_minutes !== 'number') db[userId].voice_cam_on_minutes = 0;
     if (typeof db[userId].voice_cam_off_minutes !== 'number') db[userId].voice_cam_off_minutes = 0;
 
@@ -107,93 +96,63 @@ const saveSession = (userId, durationMinutes, wasCamOn) => {
         db[userId].voice_cam_off_minutes += durationMinutes;
         db[userId].last_video = false;
     }
+    return db;
+};
+
+const saveSession = (userId, durationMinutes, wasCamOn) => {
+    let db = getDb();
+    updateDbInMemory(db, userId, durationMinutes, wasCamOn);
     fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
     console.log(`💾 Saved ${durationMinutes}m for ${userId} (Cam: ${wasCamOn})`);
 };
 
-// 🛑 KICK LOGIC
-const handleKickLogic = (member, state) => {
-    const isStrictChannel = STRICT_CHANNEL_IDS.includes(state.channelId);
-
-    if (!isStrictChannel) {
-        if (kickTimers.has(member.id)) {
-            clearTimeout(kickTimers.get(member.id));
-            kickTimers.delete(member.id);
-        }
-        return;
-    }
-
-    if (isCamOn(state)) {
-        if (kickTimers.has(member.id)) {
-            console.log(`🛡️ ${member.user.tag} turned cam ON. Kick cancelled.`);
-            clearTimeout(kickTimers.get(member.id));
-            kickTimers.delete(member.id);
-        }
-    } else {
-        if (!kickTimers.has(member.id)) {
-            console.log(`⏳ ${member.user.tag} has 3 mins to turn cam on...`);
-            const timer = setTimeout(async () => {
-                const currentMember = await member.guild.members.fetch(member.id).catch(() => null);
-                if (currentMember && 
-                    STRICT_CHANNEL_IDS.includes(currentMember.voice.channelId) && 
-                    !isCamOn(currentMember.voice)) {
-                    try {
-                        await currentMember.voice.disconnect("Camera Enforcement");
-                        console.log(`🥾 Kicked ${member.user.tag} for no camera.`);
-                    } catch (e) { console.error(`Failed to kick:`, e); }
-                }
-                kickTimers.delete(member.id);
-            }, WARNING_TIME);
-            kickTimers.set(member.id, timer);
-        }
-    }
-};
+// (Removed handleKickLogic entirely)
 
 client.on("voiceStateUpdate", (oldState, newState) => {
     const member = newState.member || oldState.member;
     if (!member) return;
-
     const oldCam = isCamOn(oldState);
     const newCam = isCamOn(newState);
     const wasIn = !!oldState.channelId;
     const isIn = !!newState.channelId;
 
-    if (isIn) handleKickLogic(member, newState);
-    else if (!isIn && kickTimers.has(member.id)) {
-        clearTimeout(kickTimers.get(member.id));
-        kickTimers.delete(member.id);
-    }
-
-    // Tracking
-    if (wasIn && !isIn) { // Left
+    // (Removed Kick Logic Checks here)
+    
+    // Tracking on Leave/Switch (Pure Tracking Only)
+    if ((wasIn && !isIn) || (wasIn && isIn && oldCam !== newCam)) {
         if (member.joinTime) {
             saveSession(member.id, Math.floor((Date.now() - member.joinTime) / 60000), oldCam);
         }
-        member.joinTime = null;
-    } else if (!wasIn && isIn) { // Joined
-        member.joinTime = Date.now();
-    } else if (wasIn && isIn && oldCam !== newCam) { // Switched
-        if (member.joinTime) {
-            saveSession(member.id, Math.floor((Date.now() - member.joinTime) / 60000), oldCam);
-        }
+        if (isIn) member.joinTime = Date.now();
+        else member.joinTime = null;
+    } else if (!wasIn && isIn) {
         member.joinTime = Date.now();
     }
 });
 
-// ---- 6. AUTO-SAVER ----
+// ⚡ 6. OPTIMIZED AUTO-SAVER
 setInterval(() => {
     const voiceChannels = client.channels.cache.filter(c => c.type === 2);
+    let db = getDb(); 
+    let changesMade = false;
+
     voiceChannels.forEach(channel => {
         channel.members.forEach(member => {
             if (member.joinTime) {
                 const mins = Math.floor((Date.now() - member.joinTime) / 60000);
                 if (mins > 0) {
-                    saveSession(member.id, mins, isCamOn(member.voice));
+                    updateDbInMemory(db, member.id, mins, isCamOn(member.voice));
                     member.joinTime = Date.now(); 
+                    changesMade = true;
                 }
             }
         });
     });
+
+    if (changesMade) {
+        fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+        console.log("💾 Batch Save Complete.");
+    }
 }, 2 * 60 * 1000);
 
 // ---- 7. INTERACTION HANDLER ----
@@ -203,9 +162,56 @@ client.on("interactionCreate", async interaction => {
     if (cmd) try { await cmd.execute(interaction); } catch (e) { console.error(e); }
 });
 
-// ---- 8. READY & MIDNIGHT RESET ----
+// ---- 8. CRON JOBS & ANTI-CRASH ----
 client.once(Events.ClientReady, (c) => {
     console.log(`✅ Logged in as ${c.user.tag}`);
+
+    // 🏆 AUTO LEADERBOARD (11:55 PM IST)
+    cron.schedule('55 23 * * *', async () => {
+        console.log("📢 Sending Auto-Leaderboard...");
+        const channel = await client.channels.fetch(AUTO_LB_CHANNEL_ID).catch(() => null);
+        if (!channel) return console.error("❌ Auto-LB Channel not found!");
+
+        let db = getDb();
+        const activeUsers = [];
+        const guild = channel.guild;
+
+        for (const [id, data] of Object.entries(db)) {
+            try {
+                const member = await guild.members.fetch(id); 
+                if (member) {
+                    activeUsers.push({
+                        name: member.displayName,
+                        camOn: data.voice_cam_on_minutes || 0,
+                        camOff: data.voice_cam_off_minutes || 0
+                    });
+                }
+            } catch (e) { /* Skip Left Users */ }
+        }
+
+        const sortedOn = [...activeUsers].sort((a, b) => b.camOn - a.camOn).slice(0, 15);
+        const sortedOff = [...activeUsers].sort((a, b) => b.camOff - a.camOff).slice(0, 10);
+        const formatTime = (m) => `${Math.floor(m / 60)}h ${m % 60}m`;
+
+        let desc = "**Cam On ✅**\n";
+        sortedOn.forEach((u, i) => { if (u.camOn > 0) desc += `#${i+1} **${u.name}** — ${formatTime(u.camOn)}\n`; });
+        if(sortedOn.length === 0) desc += "No active study data today.\n";
+
+        desc += "\n**Cam Off ❌**\n";
+        sortedOff.forEach((u, i) => { if (u.camOff > 0) desc += `#${i+1} **${u.name}** — ${formatTime(u.camOff)}\n`; });
+
+        const embed = new EmbedBuilder()
+            .setTitle("🌙 Daily Final Leaderboard")
+            .setDescription(desc)
+            .setColor(0x00FF00)
+            .setTimestamp()
+            .setFooter({ text: "Auto-Generated at 11:55 PM" });
+
+        await channel.send({ embeds: [embed] });
+
+    }, { timezone: "Asia/Kolkata" });
+
+    // 🕛 MIDNIGHT RESET (12:00 AM IST)
     cron.schedule('0 0 * * *', () => {
         console.log("🕛 Midnight Reset!");
         let db = getDb();
@@ -216,6 +222,14 @@ client.once(Events.ClientReady, (c) => {
         }
         fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
     }, { timezone: "Asia/Kolkata" });
+});
+
+// 🛡️ ANTI-CRASH
+process.on('unhandledRejection', (reason, promise) => {
+    console.log('❌ Unhandled Rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+    console.log('❌ Uncaught Exception:', err);
 });
 
 client.login(process.env.DISCORD_TOKEN);

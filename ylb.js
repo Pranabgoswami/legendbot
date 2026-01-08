@@ -3,8 +3,8 @@ import fs from "fs";
 
 export default {
     data: new SlashCommandBuilder()
-        .setName("lb") // ✅ Command is /lb
-        .setDescription("View the study leaderboard (Active Members Only)"),
+        .setName("ylb")
+        .setDescription("View Yesterday's Leaderboard"),
     async execute(interaction) {
         await interaction.deferReply(); 
 
@@ -22,20 +22,19 @@ export default {
 
         // 🔍 Filter: Only keep users currently in the server
         for (const [id, data] of Object.entries(db)) {
+            // Skip if no data for yesterday
+            if (!data.yesterday || (data.yesterday.cam_on === 0 && data.yesterday.cam_off === 0)) continue;
+
             try {
-                // Try to find the member. If they left, this fails.
                 const member = await interaction.guild.members.fetch(id);
                 if (member) {
                     activeUsers.push({
-                        id: id,
-                        name: member.displayName, // Use current server name
-                        camOn: data.voice_cam_on_minutes || 0,
-                        camOff: data.voice_cam_off_minutes || 0
+                        name: member.displayName,
+                        camOn: data.yesterday.cam_on || 0,
+                        camOff: data.yesterday.cam_off || 0
                     });
                 }
-            } catch (e) {
-                // If error (user left/banned), do nothing. They are skipped.
-            }
+            } catch (e) { /* User Left/Kicked - Skip */ }
         }
 
         // Sort Top 15
@@ -49,23 +48,23 @@ export default {
         };
 
         // Build "Cam On" List
-        let desc = "**Cam On ✅**\n";
-        if (sortedOn.length === 0) desc += "No active members have studied yet.\n";
+        let desc = "**Yesterday's Cam On ✅**\n";
+        if (sortedOn.length === 0) desc += "No data for yesterday.\n";
         
         for (const [i, u] of sortedOn.entries()) {
             if (u.camOn > 0) desc += `#${i + 1} **${u.name}** — ${formatTime(u.camOn)}\n`;
         }
 
         // Build "Cam Off" List
-        desc += "\n**Cam Off ❌**\n";
+        desc += "\n**Yesterday's Cam Off ❌**\n";
         for (const [i, u] of sortedOff.entries()) {
             if (u.camOff > 0) desc += `#${i + 1} **${u.name}** — ${formatTime(u.camOff)}\n`;
         }
 
         const embed = new EmbedBuilder()
-            .setTitle("🏆 Study Leaderboard (Active Members)")
+            .setTitle("⏮️ Yesterday's Leaderboard")
             .setDescription(desc)
-            .setColor(0xFFD700)
+            .setColor(0xA9A9A9) // Grey color for "Past"
             .setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });
